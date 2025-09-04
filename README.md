@@ -75,12 +75,41 @@ A complete authentication backend built with Express.js, MongoDB, and JWT tokens
 - `PUT /change-password` - Change password (Protected)
 - `DELETE /account` - Deactivate account (Protected)
 - `GET /all` - Get all users (Admin only)
+- `GET /companies` - Get all companies (Admin only)
+
+### Company Routes (`/api/company`)
+
+- `GET /` - Get all active companies (Public)
+- `GET /:id` - Get company by ID (Admin only)
+- `POST /` - Create new company (Admin only)
+- `PUT /:id` - Update company (Admin only)
+- `DELETE /:id` - Deactivate company (Admin only)
+- `GET /check-domain/:domain` - Check if domain is allowed (Public)
 
 ### Health Check
 
 - `GET /api/health` - API health check
 
 ## Request/Response Examples
+
+### Create Company (Admin only)
+```bash
+POST /api/company
+Authorization: Bearer <admin-jwt-token>
+Content-Type: application/json
+
+{
+  "name": "Example Corp",
+  "domains": ["example.com", "example.org"],
+  "description": "Example company description",
+  "contactEmail": "admin@example.com"
+}
+```
+
+### Check Domain
+```bash
+GET /api/company/check-domain/example.com
+```
 
 ### Register User
 ```bash
@@ -125,6 +154,15 @@ Authorization: Bearer <your-jwt-token>
 - Role-based access control
 
 ## Database Schema
+
+### Company Model
+- name (String, required, unique)
+- domains (Array of Strings, required)
+- isActive (Boolean, default: true)
+- description (String, optional)
+- contactEmail (String, optional)
+- createdAt (Date)
+- updatedAt (Date)
 
 ### User Model
 - firstName (String, required)

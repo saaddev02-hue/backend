@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
+const Company = require('../models/Company');
 const { protect, admin } = require('../middleware/auth');
 const { requireEmailVerification } = require('../middleware/emailVerification');
 
@@ -179,6 +180,29 @@ router.get('/all', protect, admin, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error getting users'
+    });
+  }
+});
+
+// @desc    Get all companies (for admin user management)
+// @route   GET /api/user/companies
+// @access  Private/Admin
+router.get('/companies', protect, admin, async (req, res) => {
+  try {
+    const companies = await Company.find()
+      .sort({ name: 1 });
+
+    res.json({
+      success: true,
+      data: {
+        companies
+      }
+    });
+  } catch (error) {
+    console.error('Get companies error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error getting companies'
     });
   }
 });

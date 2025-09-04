@@ -1,14 +1,7 @@
-// Allowed company domains for registration
-const allowedDomains = [
-  'aramco.com',
-  'adnoc.ae', 
-  'qtm.com.qa',
-  'pdo.co.om',
-  'dnv.com',
-  'saherflow.com'
-];  
-// Check if email domain is allowed
-const validateCompanyDomain = (req, res, next) => {
+const Company = require('../models/Company');
+
+// Check if email domain is allowed based on database companies
+const validateCompanyDomain = async (req, res, next) => {
   try {
     const { email } = req.body;
     
@@ -28,19 +21,32 @@ const validateCompanyDomain = (req, res, next) => {
       });
     }
 
-    // Check if domain is in allowed list
-    const isAllowedDomain = allowedDomains.some(domain => 
-      emailDomain === domain || emailDomain.endsWith('.' + domain)
-    );
+    // Find company by domain from database
+    const company = await Company.findByDomain(emailDomain);
 
-    if (!isAllowedDomain) {
+    if (!company) {
+      // Get all active companies for error message
+      const activeCompanies = await Company.find({ isActive: true })
+        .select('name domains')
+        .sort({ name: 1 });
+      
+      const allowedDomains = activeCompanies.reduce((acc, comp) => {
+        return acc.concat(comp.domains);
+      }, []);
+
       return res.status(403).json({
         success: false,
-        message: `Registration is restricted to employees of approved companies only. Allowed domains: ${allowedDomains.join(', ')}`,
-        allowedDomains: allowedDomains
+        message: `Registration is restricted to employees of approved companies only.`,
+        allowedDomains: allowedDomains,
+        approvedCompanies: activeCompanies.map(comp => ({
+          name: comp.name,
+          domains: comp.domains
+        }))
       });
     }
 
+    // Store the found company in request for later use
+    req.approvedCompany = company;
     next();
   } catch (error) {
     console.error('Domain validation error:', error);
@@ -51,4 +57,4 @@ const validateCompanyDomain = (req, res, next) => {
   }
 };
 
-module.exports = { validateCompanyDomain, allowedDomains };
+module.exports = { validateCompanyDomain };
