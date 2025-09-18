@@ -133,17 +133,6 @@ class Database {
         )
       `);
 
-      // Create device_data table for storing time-series data
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS device_data (
-          id BIGSERIAL PRIMARY KEY,
-          device_id BIGINT NOT NULL REFERENCES device(id) ON DELETE CASCADE,
-          serial_number TEXT NOT NULL,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-          data JSONB NOT NULL
-        )
-      `);
-
       // Create hierarchy_device table (many-to-many relationship)
       await client.query(`
         CREATE TABLE IF NOT EXISTS hierarchy_device (
@@ -166,9 +155,6 @@ class Database {
         CREATE INDEX IF NOT EXISTS idx_hierarchy_device_device_id ON hierarchy_device(device_id);
         CREATE INDEX IF NOT EXISTS idx_device_company_id ON device(company_id);
         CREATE INDEX IF NOT EXISTS idx_device_serial ON device(serial_number);
-        CREATE INDEX IF NOT EXISTS idx_device_data_device_id ON device_data(device_id);
-        CREATE INDEX IF NOT EXISTS idx_device_data_created_at ON device_data(created_at);
-        CREATE INDEX IF NOT EXISTS idx_device_data_serial ON device_data(serial_number);
       `);
 
       await client.query('COMMIT');

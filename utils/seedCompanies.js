@@ -3,11 +3,15 @@ const Company = require('../models/Company');
 // Initial companies data
 const initialCompanies = [
   {
-    name: 'Arabco',
-    domain_name: 'arabco.com'
+    name: 'Saudi Aramco',
+    domain_name: 'aramco.com'
   },
   {
-    name: 'Saher Flow',
+    name: 'Abu Dhabi National Oil Company',
+    domain_name: 'adnoc.ae'
+  },
+  {
+    name: 'Saher Flow Solutions',
     domain_name: 'saherflow.com'
   }
 ];
@@ -24,7 +28,7 @@ const seedCompanies = async () => {
 
     // Insert initial companies
     for (const companyData of initialCompanies) {
-      await Company.create(companyData);
+      await Company.create(companyData)
     }
     
     console.log('✅ Initial companies seeded successfully');
