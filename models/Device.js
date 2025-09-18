@@ -6,10 +6,8 @@ class Device {
     this.company_id = data.company_id;
     this.device_type_id = data.device_type_id;
     this.serial_number = data.serial_number;
-    this.hierarchy_id = data.hierarchy_id;
     this.metadata = data.metadata;
     this.created_at = data.created_at;
-    this.updated_at = data.updated_at;
     this.device_type_name = data.device_type_name;
     this.hierarchy_name = data.hierarchy_name;
     this.company_name = data.company_name;
@@ -17,10 +15,9 @@ class Device {
 
   static async findById(id) {
     const query = `
-      SELECT d.*, dt.type_name as device_type_name, h.name as hierarchy_name, c.name as company_name
+      SELECT d.*, dt.type_name as device_type_name, c.name as company_name
       FROM device d
       JOIN device_type dt ON d.device_type_id = dt.id
-      LEFT JOIN hierarchy h ON d.hierarchy_id = h.id
       JOIN company c ON d.company_id = c.id
       WHERE d.id = $1
     `;
@@ -30,29 +27,14 @@ class Device {
 
   static async findByCompany(company_id) {
     const query = `
-      SELECT d.*, dt.type_name as device_type_name, h.name as hierarchy_name, c.name as company_name
+      SELECT d.*, dt.type_name as device_type_name, c.name as company_name
       FROM device d
       JOIN device_type dt ON d.device_type_id = dt.id
-      LEFT JOIN hierarchy h ON d.hierarchy_id = h.id
       JOIN company c ON d.company_id = c.id
       WHERE d.company_id = $1
       ORDER BY d.serial_number
     `;
     const result = await database.query(query, [company_id]);
-    return result.rows.map(row => new Device(row));
-  }
-
-  static async findByHierarchy(hierarchy_id) {
-    const query = `
-      SELECT d.*, dt.type_name as device_type_name, h.name as hierarchy_name, c.name as company_name
-      FROM device d
-      JOIN device_type dt ON d.device_type_id = dt.id
-      LEFT JOIN hierarchy h ON d.hierarchy_id = h.id
-      JOIN company c ON d.company_id = c.id
-      WHERE d.hierarchy_id = $1
-      ORDER BY d.serial_number
-    `;
-    const result = await database.query(query, [hierarchy_id]);
     return result.rows.map(row => new Device(row));
   }
 
@@ -130,33 +112,35 @@ class Device {
         groupBy = "date_trunc('minute', dd.created_at)";
     }
 
+    // Use the exact query structure provided by TL
     const query = `
       WITH RECURSIVE hierarchy_cte AS (
-        -- Start from the selected hierarchy
+        -- start from the selected hierarchy
         SELECT id
         FROM hierarchy
         WHERE id = $1
 
         UNION ALL
 
-        -- Recursive step: fetch all children
+        -- recursive step: fetch all children
         SELECT h.id
         FROM hierarchy h
         JOIN hierarchy_cte c ON h.parent_id = c.id
       ),
       devices AS (
-        -- Devices attached to wells under this hierarchy
-        SELECT d.id, d.hierarchy_id
+        -- devices attached to wells under this hierarchy
+        SELECT d.id, hd.hierarchy_id
         FROM device d
-        WHERE d.hierarchy_id IN (
+        JOIN hierarchy_device hd ON d.id = hd.device_id
+        WHERE hd.hierarchy_id IN (
           SELECT id FROM hierarchy_cte
         )
       ),
-      device_data_aggregated AS (
-        -- Average per device per time period
+      device_data_minute AS (
+        -- average per device per minute
         SELECT 
           dd.device_id,
-          ${groupBy} AS time_period,
+          ${groupBy} AS minute,
           AVG((dd.data->>'GFR')::numeric) AS avg_gfr,
           AVG((dd.data->>'GOR')::numeric) AS avg_gor,
           AVG((dd.data->>'GVF')::numeric) AS avg_gvf,
@@ -171,9 +155,9 @@ class Device {
         GROUP BY dd.device_id, ${groupBy}
       ),
       summed AS (
-        -- Sum across devices per time period
+        -- sum across devices per minute
         SELECT 
-          time_period,
+          minute,
           SUM(avg_gfr) AS total_gfr,
           SUM(avg_gor) AS total_gor,
           SUM(avg_ofr) AS total_ofr,
@@ -191,12 +175,12 @@ class Device {
           AVG(avg_pressure) AS avg_pressure,
           AVG(avg_temp) AS avg_temp,
           COUNT(DISTINCT device_id) as device_count
-        FROM device_data_aggregated
-        GROUP BY time_period
+        FROM device_data_minute
+        GROUP BY minute
       )
       SELECT * 
       FROM summed
-      ORDER BY time_period
+      ORDER BY minute
     `;
 
     const result = await database.query(query, [hierarchy_id]);
@@ -208,12 +192,10 @@ class Device {
       SELECT 
         dd.*,
         d.serial_number,
-        dt.type_name as device_type,
-        h.name as hierarchy_name
+        dt.type_name as device_type
       FROM device_data dd
       JOIN device d ON dd.device_id = d.id
       JOIN device_type dt ON d.device_type_id = dt.id
-      LEFT JOIN hierarchy h ON d.hierarchy_id = h.id
       WHERE dd.device_id = $1
       ORDER BY dd.created_at DESC
       LIMIT 1
@@ -229,10 +211,8 @@ class Device {
       company_id: this.company_id,
       device_type_id: this.device_type_id,
       serial_number: this.serial_number,
-      hierarchy_id: this.hierarchy_id,
       metadata: this.metadata,
       created_at: this.created_at,
-      updated_at: this.updated_at,
       device_type_name: this.device_type_name,
       hierarchy_name: this.hierarchy_name,
       company_name: this.company_name

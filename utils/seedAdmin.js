@@ -41,9 +41,9 @@ const createAdminUser = async () => {
     // Create test users for each company
     const testUsers = [
       {
-        company: 'Aramco',
-        domain: 'aramco.com',
-        email: 'john@aramco.com',
+        company: 'Arabco',
+        domain: 'arabco.com',
+        email: 'john@arabco.com',
         name: 'John Doe'
       },
       {

@@ -56,7 +56,8 @@ class Hierarchy {
       FROM hierarchy h
       JOIN hierarchy_level hl ON h.level_id = hl.id
       JOIN company c ON h.company_id = c.id
-      LEFT JOIN device d ON h.id = d.hierarchy_id
+      LEFT JOIN hierarchy_device hd ON h.id = hd.hierarchy_id
+      LEFT JOIN device d ON hd.device_id = d.id
       LEFT JOIN device_type dt ON d.device_type_id = dt.id
     `;
     
@@ -121,7 +122,7 @@ class Hierarchy {
           type: row.device_type,
           logo: row.device_logo,
           metadata: deviceMetadata,
-          status: deviceMetadata.status || 'unknown'
+          status: deviceMetadata.status || 'active'
         });
       }
     });

@@ -61,28 +61,25 @@ class Database {
           is_active BOOLEAN DEFAULT TRUE,
           last_login_time TIMESTAMPTZ,
           last_login_ip INET,
-          allowed_ip_list INET[]
+          allowed_ip_list INET[],
+          password_hash TEXT,
+          role TEXT DEFAULT 'user',
+          email_verification_token TEXT,
+          email_verification_expires TIMESTAMPTZ,
+          password_reset_token TEXT,
+          password_reset_expires TIMESTAMPTZ,
+          email_validated BOOLEAN DEFAULT FALSE
         )
       `);
 
-      // Add additional fields for authentication
+      // Create device_type table
       await client.query(`
-        ALTER TABLE "user" 
-        ADD COLUMN IF NOT EXISTS password_hash TEXT,
-        ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user',
-        ADD COLUMN IF NOT EXISTS email_verification_token TEXT,
-        ADD COLUMN IF NOT EXISTS email_verification_expires TIMESTAMPTZ,
-        ADD COLUMN IF NOT EXISTS password_reset_token TEXT,
-        ADD COLUMN IF NOT EXISTS password_reset_expires TIMESTAMPTZ,
-        ADD COLUMN IF NOT EXISTS email_validated BOOLEAN DEFAULT FALSE
-      `);
-
-      // Remove 2FA related fields if they exist
-      await client.query(`
-        ALTER TABLE "user" 
-        DROP COLUMN IF EXISTS two_factor_secret,
-        DROP COLUMN IF EXISTS two_factor_enabled,
-        DROP COLUMN IF EXISTS two_factor_backup_codes
+        CREATE TABLE IF NOT EXISTS device_type (
+          id BIGSERIAL PRIMARY KEY,
+          type_name TEXT NOT NULL UNIQUE,
+          logo TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
       `);
 
       // Create hierarchy_level table
@@ -101,7 +98,7 @@ class Database {
           id BIGSERIAL PRIMARY KEY,
           company_id BIGINT NOT NULL REFERENCES company(id) ON DELETE CASCADE,
           name TEXT NOT NULL,
-          level_id BIGINT NOT NULL REFERENCES hierarchy_level(id) ON DELETE RESTRICT,
+          level_id BIGINT NOT NULL REFERENCES hierarchy_level(id),
           parent_id BIGINT REFERENCES hierarchy(id) ON DELETE CASCADE,
           can_attach_device BOOLEAN DEFAULT TRUE,
           created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -109,27 +106,15 @@ class Database {
         )
       `);
 
-      // Create device_type table (for hierarchy_device relationships)
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS device_type (
-          id BIGSERIAL PRIMARY KEY,
-          type_name TEXT NOT NULL UNIQUE,
-          logo TEXT,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-        )
-      `);
-
-      // Create device table (for hierarchy_device relationships)
+      // Create device table
       await client.query(`
         CREATE TABLE IF NOT EXISTS device (
           id BIGSERIAL PRIMARY KEY,
           company_id BIGINT NOT NULL REFERENCES company(id) ON DELETE CASCADE,
-          device_type_id BIGINT NOT NULL REFERENCES device_type(id) ON DELETE RESTRICT,
+          device_type_id BIGINT NOT NULL REFERENCES device_type(id),
           serial_number TEXT NOT NULL UNIQUE,
           metadata JSONB,
-          is_active BOOLEAN DEFAULT TRUE,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-          updated_at TIMESTAMPTZ
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
         )
       `);
 
@@ -143,6 +128,58 @@ class Database {
           UNIQUE(hierarchy_id, device_id)
         )
       `);
+
+      // Create device_data table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS device_data (
+          id BIGSERIAL PRIMARY KEY,
+          device_id BIGINT NOT NULL REFERENCES device(id) ON DELETE CASCADE,
+          serial_number TEXT NOT NULL REFERENCES device(serial_number),
+          created_at TIMESTAMPTZ NOT NULL,
+          longitude DOUBLE PRECISION,
+          latitude DOUBLE PRECISION,
+          data JSONB NOT NULL
+        )
+      `);
+
+      // Create device_latest table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS device_latest (
+          device_id BIGINT PRIMARY KEY REFERENCES device(id) ON DELETE CASCADE,
+          serial_number TEXT NOT NULL,
+          updated_at TIMESTAMPTZ NOT NULL,
+          longitude DOUBLE PRECISION,
+          latitude DOUBLE PRECISION,
+          data JSONB NOT NULL,
+          received_at TIMESTAMPTZ DEFAULT now() NOT NULL
+        )
+      `);
+
+      // Create device_data_mapping table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS device_data_mapping (
+          id BIGSERIAL PRIMARY KEY,
+          device_type_id BIGINT NOT NULL REFERENCES device_type(id) ON DELETE CASCADE,
+          variable_name TEXT NOT NULL,
+          variable_tag TEXT,
+          data_type TEXT,
+          unit TEXT,
+          ui_order INTEGER DEFAULT 100,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+
+      // Create user_hierarchy table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS user_hierarchy (
+          id BIGSERIAL PRIMARY KEY,
+          user_id BIGINT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+          hierarchy_id BIGINT NOT NULL REFERENCES hierarchy(id) ON DELETE CASCADE,
+          role TEXT DEFAULT 'viewer',
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+
       // Create indexes
       await client.query(`
         CREATE INDEX IF NOT EXISTS idx_user_email ON "user"(email);
@@ -155,6 +192,10 @@ class Database {
         CREATE INDEX IF NOT EXISTS idx_hierarchy_device_device_id ON hierarchy_device(device_id);
         CREATE INDEX IF NOT EXISTS idx_device_company_id ON device(company_id);
         CREATE INDEX IF NOT EXISTS idx_device_serial ON device(serial_number);
+        CREATE INDEX IF NOT EXISTS idx_device_data_device_created_at ON device_data(device_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS brin_device_data_created_at ON device_data USING brin(created_at);
+        CREATE INDEX IF NOT EXISTS gin_device_data_data ON device_data USING gin(data);
+        CREATE INDEX IF NOT EXISTS fk_device_serial ON device_data(serial_number);
       `);
 
       await client.query('COMMIT');

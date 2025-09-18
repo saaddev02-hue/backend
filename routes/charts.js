@@ -109,8 +109,9 @@ router.get('/hierarchy/:hierarchyId', protect, async (req, res) => {
       SELECT d.*, dt.type_name as device_type_name, h.name as hierarchy_name
       FROM device d
       JOIN device_type dt ON d.device_type_id = dt.id
-      LEFT JOIN hierarchy h ON d.hierarchy_id = h.id
-      WHERE d.hierarchy_id IN (SELECT id FROM hierarchy_cte)
+      JOIN hierarchy_device hd ON d.id = hd.device_id
+      JOIN hierarchy h ON hd.hierarchy_id = h.id
+      WHERE hd.hierarchy_id IN (SELECT id FROM hierarchy_cte)
       ORDER BY d.serial_number
     `;
     
@@ -123,7 +124,7 @@ router.get('/hierarchy/:hierarchyId', protect, async (req, res) => {
       data: {
         hierarchy: hierarchy.toJSON(),
         chartData: chartData.map(row => ({
-          timestamp: row.time_period,
+          timestamp: row.minute,
           totalGfr: parseFloat(row.total_gfr) || 0,
           totalGor: parseFloat(row.total_gor) || 0,
           totalOfr: parseFloat(row.total_ofr) || 0,
@@ -185,12 +186,10 @@ router.get('/device/:deviceId/realtime', protect, async (req, res) => {
       SELECT 
         dl.*,
         d.serial_number,
-        dt.type_name as device_type,
-        h.name as hierarchy_name
+        dt.type_name as device_type
       FROM device_latest dl
       JOIN device d ON dl.device_id = d.id
       JOIN device_type dt ON d.device_type_id = dt.id
-      LEFT JOIN hierarchy h ON d.hierarchy_id = h.id
       WHERE dl.device_id = $1
     `;
 
@@ -198,12 +197,23 @@ router.get('/device/:deviceId/realtime', protect, async (req, res) => {
     const latestData = result.rows[0];
 
     if (!latestData) {
+      // Fallback to latest device_data entry
+      const fallbackData = await Device.getLatestDeviceData(deviceId);
+      
       return res.json({
         success: true,
-        message: 'No real-time data available for this device',
+        message: 'Real-time device data retrieved successfully',
         data: {
           device: device.toJSON(),
-          latestData: null
+          latestData: fallbackData ? {
+            timestamp: fallbackData.created_at,
+            receivedAt: fallbackData.created_at,
+            data: fallbackData.data,
+            longitude: fallbackData.longitude,
+            latitude: fallbackData.latitude,
+            serialNumber: fallbackData.serial_number,
+            deviceType: fallbackData.device_type
+          } : null
         }
       });
     }
@@ -220,8 +230,7 @@ router.get('/device/:deviceId/realtime', protect, async (req, res) => {
           longitude: latestData.longitude,
           latitude: latestData.latitude,
           serialNumber: latestData.serial_number,
-          deviceType: latestData.device_type,
-          hierarchyName: latestData.hierarchy_name
+          deviceType: latestData.device_type
         }
       }
     });
@@ -285,13 +294,11 @@ router.get('/dashboard', protect, async (req, res) => {
       SELECT 
         d.serial_number,
         dt.type_name,
-        h.name as hierarchy_name,
         dd.created_at,
         dd.data
       FROM device_data dd
       JOIN device d ON dd.device_id = d.id
       JOIN device_type dt ON d.device_type_id = dt.id
-      LEFT JOIN hierarchy h ON d.hierarchy_id = h.id
       WHERE d.company_id = $1
       ORDER BY dd.created_at DESC
       LIMIT 10
@@ -326,7 +333,6 @@ router.get('/dashboard', protect, async (req, res) => {
         recentActivity: recentActivityResult.rows.map(row => ({
           deviceSerial: row.serial_number,
           deviceType: row.type_name,
-          hierarchyName: row.hierarchy_name,
           timestamp: row.created_at,
           data: row.data
         })),

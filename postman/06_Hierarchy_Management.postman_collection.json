@@ -53,7 +53,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"admin@aramco.com\",\n  \"password\": \"Admin123\"\n}"
+              "raw": "{\n  \"email\": \"admin@saherflow.com\",\n  \"password\": \"Admin123\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/auth/login",
@@ -63,7 +63,7 @@
           }
         },
         {
-          "name": "User Login (Saudi aramco)",
+          "name": "User Login (Arabco)",
           "event": [
             {
               "listen": "test",
@@ -90,7 +90,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"john@aramco.com\",\n  \"password\": \"Password123\"\n}"
+              "raw": "{\n  \"email\": \"john@arabco.com\",\n  \"password\": \"Password123\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/auth/login",
@@ -124,7 +124,7 @@
               "host": ["{{base_url}}"],
               "path": ["api", "hierarchy-level"]
             },
-            "description": "Get all hierarchy levels (Region, Area, Well, Device)"
+            "description": "Get all hierarchy levels (Region, Area, Field, Well)"
           }
         },
         {
@@ -175,7 +175,7 @@
               "host": ["{{base_url}}"],
               "path": ["api", "hierarchy", "tree"]
             },
-            "description": "Get complete hierarchy tree for user's company (Saudi aramco)"
+            "description": "Get complete hierarchy tree for user's company (Arabco)"
           }
         },
         {
@@ -202,7 +202,7 @@
           }
         },
         {
-          "name": "Get Hierarchy Tree for Specific Company",
+          "name": "Get Hierarchy Tree for Arabco",
           "request": {
             "auth": {
               "type": "bearer",
@@ -227,11 +227,11 @@
                 }
               ]
             },
-            "description": "Get hierarchy tree for specific company (admin only)"
+            "description": "Get hierarchy tree for Arabco (admin only)"
           }
         },
         {
-          "name": "Get ADNOC Hierarchy Tree",
+          "name": "Get Saher Flow Hierarchy Tree",
           "request": {
             "auth": {
               "type": "bearer",
@@ -256,7 +256,7 @@
                 }
               ]
             },
-            "description": "Get hierarchy tree for ADNOC (admin only)"
+            "description": "Get hierarchy tree for Saher Flow (admin only)"
           }
         },
         {
@@ -453,9 +453,9 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/hierarchy/devices/10",
+              "raw": "{{base_url}}/api/hierarchy/devices/2",
               "host": ["{{base_url}}"],
-              "path": ["api", "hierarchy", "devices", "10"]
+              "path": ["api", "hierarchy", "devices", "2"]
             },
             "description": "Test access control - should fail if device belongs to another company"
           }

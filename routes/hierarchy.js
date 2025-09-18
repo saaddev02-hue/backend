@@ -72,7 +72,8 @@ router.get('/dashboard', protect, async (req, res) => {
         COUNT(DISTINCT d.id) as total_devices
       FROM hierarchy h
       JOIN hierarchy_level hl ON h.level_id = hl.id
-      LEFT JOIN device d ON h.id = d.hierarchy_id
+      LEFT JOIN hierarchy_device hd ON h.id = hd.hierarchy_id
+      LEFT JOIN device d ON hd.device_id = d.id
       WHERE h.company_id = $1
     `;
     
@@ -142,15 +143,15 @@ router.get('/devices', protect, async (req, res) => {
     const database = require('../config/database');
     const devicesQuery = `
       SELECT 
-        d.id, d.serial_number, d.metadata, d.is_active, d.created_at,
+        d.id, d.serial_number, d.metadata, d.created_at,
         dt.type_name, dt.logo,
         h.name as location_name,
-        c.name as company_name,
-        h.name as full_location
+        c.name as company_name
       FROM device d
       JOIN device_type dt ON d.device_type_id = dt.id
       JOIN company c ON d.company_id = c.id
-      LEFT JOIN hierarchy h ON d.hierarchy_id = h.id
+      LEFT JOIN hierarchy_device hd ON d.id = hd.device_id
+      LEFT JOIN hierarchy h ON hd.hierarchy_id = h.id
       WHERE d.company_id = $1
       ORDER BY dt.type_name, d.serial_number
     `;
@@ -164,7 +165,6 @@ router.get('/devices', protect, async (req, res) => {
       metadata: row.metadata || {},
       created_at: row.created_at,
       location: row.location_name,
-      full_location: row.full_location,
       company: row.company_name
     }));
 
@@ -199,12 +199,12 @@ router.get('/devices/:id', protect, async (req, res) => {
         d.id, d.serial_number, d.metadata, d.created_at,
         dt.type_name, dt.logo,
         h.name as location_name,
-        c.id as company_id, c.name as company_name,
-        h.name as full_location
+        c.id as company_id, c.name as company_name
       FROM device d
       JOIN device_type dt ON d.device_type_id = dt.id
       JOIN company c ON d.company_id = c.id
-      LEFT JOIN hierarchy h ON d.hierarchy_id = h.id
+      LEFT JOIN hierarchy_device hd ON d.id = hd.device_id
+      LEFT JOIN hierarchy h ON hd.hierarchy_id = h.id
       WHERE d.id = $1
     `;
 
@@ -239,7 +239,6 @@ router.get('/devices/:id', protect, async (req, res) => {
           metadata: device.metadata || {},
           created_at: device.created_at,
           location: device.location_name,
-          full_location: device.full_location,
           company: {
             id: device.company_id,
             name: device.company_name

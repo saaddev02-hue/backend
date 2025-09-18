@@ -73,7 +73,7 @@
           }
         },
         {
-          "name": "User Login (Aramco)",
+          "name": "User Login (Arabco)",
           "event": [
             {
               "listen": "test",
@@ -100,7 +100,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"john@aramco.com\",\n  \"password\": \"Password123\"\n}"
+              "raw": "{\n  \"email\": \"john@arabco.com\",\n  \"password\": \"Password123\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/auth/login",
@@ -259,7 +259,7 @@
       "name": "Hierarchy Charts",
       "item": [
         {
-          "name": "Get Region Chart Data",
+          "name": "Get Region Chart Data (Eastern Region)",
           "request": {
             "auth": {
               "type": "bearer",
@@ -288,7 +288,7 @@
           }
         },
         {
-          "name": "Get Area Chart Data",
+          "name": "Get Area Chart Data (Abqaiq Area)",
           "request": {
             "auth": {
               "type": "bearer",
@@ -317,7 +317,7 @@
           }
         },
         {
-          "name": "Get Field Chart Data",
+          "name": "Get Field Chart Data (Ghawar Field)",
           "request": {
             "auth": {
               "type": "bearer",
@@ -346,7 +346,7 @@
           }
         },
         {
-          "name": "Get Well Chart Data",
+          "name": "Get Well Chart Data (Well-101)",
           "request": {
             "auth": {
               "type": "bearer",

@@ -1,10 +1,10 @@
 const Company = require('../models/Company');
 
-// Initial companies data
+// Initial companies data - updated to use Arabco instead of Aramco
 const initialCompanies = [
   {
-    name: 'Aramco',
-    domain_name: 'aramco.com'
+    name: 'Arabco',
+    domain_name: 'arabco.com'
   },
   {
     name: 'Saher Flow',
@@ -24,7 +24,7 @@ const seedCompanies = async () => {
 
     // Insert initial companies
     for (const companyData of initialCompanies) {
-      await Company.create(companyData)
+      await Company.create(companyData);
     }
     
     console.log('✅ Initial companies seeded successfully');
