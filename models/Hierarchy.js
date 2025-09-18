@@ -11,13 +11,14 @@ class Hierarchy {
     this.created_at = data.created_at;
     this.updated_at = data.updated_at;
     this.level_name = data.level_name;
+    this.level_order = data.level_order;
     this.company_name = data.company_name;
     this.parent_name = data.parent_name;
   }
 
   static async findById(id) {
     const query = `
-      SELECT h.*, hl.name as level_name, c.name as company_name, 
+      SELECT h.*, hl.name as level_name, hl.level_order, c.name as company_name, 
              ph.name as parent_name
       FROM hierarchy h
       JOIN hierarchy_level hl ON h.level_id = hl.id
@@ -31,7 +32,7 @@ class Hierarchy {
 
   static async findByCompany(company_id) {
     const query = `
-      SELECT h.*, hl.name as level_name, c.name as company_name,
+      SELECT h.*, hl.name as level_name, hl.level_order, c.name as company_name,
              ph.name as parent_name
       FROM hierarchy h
       JOIN hierarchy_level hl ON h.level_id = hl.id
@@ -55,8 +56,7 @@ class Hierarchy {
       FROM hierarchy h
       JOIN hierarchy_level hl ON h.level_id = hl.id
       JOIN company c ON h.company_id = c.id
-      LEFT JOIN hierarchy_device hd ON h.id = hd.hierarchy_id
-      LEFT JOIN device d ON hd.device_id = d.id
+      LEFT JOIN device d ON h.id = d.hierarchy_id
       LEFT JOIN device_type dt ON d.device_type_id = dt.id
     `;
     
@@ -84,6 +84,7 @@ class Hierarchy {
             totalNodes: 0,
             regions: 0,
             areas: 0,
+            fields: 0,
             wells: 0,
             devices: 0
           }
@@ -106,13 +107,14 @@ class Hierarchy {
         companies[row.company_name].statistics.totalNodes++;
         if (row.level_name === 'Region') companies[row.company_name].statistics.regions++;
         else if (row.level_name === 'Area') companies[row.company_name].statistics.areas++;
+        else if (row.level_name === 'Field') companies[row.company_name].statistics.fields++;
         else if (row.level_name === 'Well') companies[row.company_name].statistics.wells++;
-        else if (row.level_name === 'Device') companies[row.company_name].statistics.devices++;
       }
 
       // Add device info if exists
       if (row.device_id) {
         const deviceMetadata = row.metadata || {};
+        companies[row.company_name].statistics.devices++;
         nodeMap[row.id].devices.push({
           id: row.device_id,
           serial_number: row.serial_number,
@@ -148,6 +150,7 @@ class Hierarchy {
       created_at: this.created_at,
       updated_at: this.updated_at,
       level_name: this.level_name,
+      level_order: this.level_order,
       company_name: this.company_name,
       parent_name: this.parent_name
     };

@@ -1,0 +1,243 @@
+const database = require('../config/database');
+
+class Device {
+  constructor(data = {}) {
+    this.id = data.id;
+    this.company_id = data.company_id;
+    this.device_type_id = data.device_type_id;
+    this.serial_number = data.serial_number;
+    this.hierarchy_id = data.hierarchy_id;
+    this.metadata = data.metadata;
+    this.created_at = data.created_at;
+    this.updated_at = data.updated_at;
+    this.device_type_name = data.device_type_name;
+    this.hierarchy_name = data.hierarchy_name;
+    this.company_name = data.company_name;
+  }
+
+  static async findById(id) {
+    const query = `
+      SELECT d.*, dt.type_name as device_type_name, h.name as hierarchy_name, c.name as company_name
+      FROM device d
+      JOIN device_type dt ON d.device_type_id = dt.id
+      LEFT JOIN hierarchy h ON d.hierarchy_id = h.id
+      JOIN company c ON d.company_id = c.id
+      WHERE d.id = $1
+    `;
+    const result = await database.query(query, [id]);
+    return result.rows[0] ? new Device(result.rows[0]) : null;
+  }
+
+  static async findByCompany(company_id) {
+    const query = `
+      SELECT d.*, dt.type_name as device_type_name, h.name as hierarchy_name, c.name as company_name
+      FROM device d
+      JOIN device_type dt ON d.device_type_id = dt.id
+      LEFT JOIN hierarchy h ON d.hierarchy_id = h.id
+      JOIN company c ON d.company_id = c.id
+      WHERE d.company_id = $1
+      ORDER BY d.serial_number
+    `;
+    const result = await database.query(query, [company_id]);
+    return result.rows.map(row => new Device(row));
+  }
+
+  static async findByHierarchy(hierarchy_id) {
+    const query = `
+      SELECT d.*, dt.type_name as device_type_name, h.name as hierarchy_name, c.name as company_name
+      FROM device d
+      JOIN device_type dt ON d.device_type_id = dt.id
+      LEFT JOIN hierarchy h ON d.hierarchy_id = h.id
+      JOIN company c ON d.company_id = c.id
+      WHERE d.hierarchy_id = $1
+      ORDER BY d.serial_number
+    `;
+    const result = await database.query(query, [hierarchy_id]);
+    return result.rows.map(row => new Device(row));
+  }
+
+  static async getDeviceChartData(device_id, timeRange = 'day') {
+    let timeFilter = '';
+    let groupBy = '';
+    
+    switch (timeRange) {
+      case 'hour':
+        timeFilter = "dd.created_at >= now() - interval '1 hour'";
+        groupBy = "date_trunc('minute', dd.created_at)";
+        break;
+      case 'day':
+        timeFilter = "dd.created_at >= date_trunc('day', now())";
+        groupBy = "date_trunc('minute', dd.created_at)";
+        break;
+      case 'week':
+        timeFilter = "dd.created_at >= now() - interval '7 days'";
+        groupBy = "date_trunc('hour', dd.created_at)";
+        break;
+      case 'month':
+        timeFilter = "dd.created_at >= now() - interval '30 days'";
+        groupBy = "date_trunc('day', dd.created_at)";
+        break;
+      default:
+        timeFilter = "dd.created_at >= date_trunc('day', now())";
+        groupBy = "date_trunc('minute', dd.created_at)";
+    }
+
+    const query = `
+      SELECT 
+        ${groupBy} AS time_period,
+        AVG((dd.data->>'GFR')::numeric) AS avg_gfr,
+        AVG((dd.data->>'GOR')::numeric) AS avg_gor,
+        AVG((dd.data->>'GVF')::numeric) AS avg_gvf,
+        AVG((dd.data->>'OFR')::numeric) AS avg_ofr,
+        AVG((dd.data->>'WFR')::numeric) AS avg_wfr,
+        AVG((dd.data->>'WLR')::numeric) AS avg_wlr,
+        AVG((dd.data->>'PressureAvg')::numeric) AS avg_pressure,
+        AVG((dd.data->>'TemperatureAvg')::numeric) AS avg_temp,
+        COUNT(*) as data_points
+      FROM device_data dd
+      WHERE dd.device_id = $1 AND ${timeFilter}
+      GROUP BY ${groupBy}
+      ORDER BY time_period
+    `;
+
+    const result = await database.query(query, [device_id]);
+    return result.rows;
+  }
+
+  static async getHierarchyChartData(hierarchy_id, timeRange = 'day') {
+    let timeFilter = '';
+    let groupBy = '';
+    
+    switch (timeRange) {
+      case 'hour':
+        timeFilter = "dd.created_at >= now() - interval '1 hour'";
+        groupBy = "date_trunc('minute', dd.created_at)";
+        break;
+      case 'day':
+        timeFilter = "dd.created_at >= date_trunc('day', now())";
+        groupBy = "date_trunc('minute', dd.created_at)";
+        break;
+      case 'week':
+        timeFilter = "dd.created_at >= now() - interval '7 days'";
+        groupBy = "date_trunc('hour', dd.created_at)";
+        break;
+      case 'month':
+        timeFilter = "dd.created_at >= now() - interval '30 days'";
+        groupBy = "date_trunc('day', dd.created_at)";
+        break;
+      default:
+        timeFilter = "dd.created_at >= date_trunc('day', now())";
+        groupBy = "date_trunc('minute', dd.created_at)";
+    }
+
+    const query = `
+      WITH RECURSIVE hierarchy_cte AS (
+        -- Start from the selected hierarchy
+        SELECT id
+        FROM hierarchy
+        WHERE id = $1
+
+        UNION ALL
+
+        -- Recursive step: fetch all children
+        SELECT h.id
+        FROM hierarchy h
+        JOIN hierarchy_cte c ON h.parent_id = c.id
+      ),
+      devices AS (
+        -- Devices attached to wells under this hierarchy
+        SELECT d.id, d.hierarchy_id
+        FROM device d
+        WHERE d.hierarchy_id IN (
+          SELECT id FROM hierarchy_cte
+        )
+      ),
+      device_data_aggregated AS (
+        -- Average per device per time period
+        SELECT 
+          dd.device_id,
+          ${groupBy} AS time_period,
+          AVG((dd.data->>'GFR')::numeric) AS avg_gfr,
+          AVG((dd.data->>'GOR')::numeric) AS avg_gor,
+          AVG((dd.data->>'GVF')::numeric) AS avg_gvf,
+          AVG((dd.data->>'OFR')::numeric) AS avg_ofr,
+          AVG((dd.data->>'WFR')::numeric) AS avg_wfr,
+          AVG((dd.data->>'WLR')::numeric) AS avg_wlr,
+          AVG((dd.data->>'PressureAvg')::numeric) AS avg_pressure,
+          AVG((dd.data->>'TemperatureAvg')::numeric) AS avg_temp
+        FROM device_data dd
+        JOIN devices d ON d.id = dd.device_id
+        WHERE ${timeFilter}
+        GROUP BY dd.device_id, ${groupBy}
+      ),
+      summed AS (
+        -- Sum across devices per time period
+        SELECT 
+          time_period,
+          SUM(avg_gfr) AS total_gfr,
+          SUM(avg_gor) AS total_gor,
+          SUM(avg_ofr) AS total_ofr,
+          SUM(avg_wfr) AS total_wfr,
+          CASE 
+            WHEN (SUM(avg_gfr) + SUM(avg_ofr) + SUM(avg_wfr)) > 0 
+            THEN SUM(avg_gfr) * 100 / (SUM(avg_gfr) + SUM(avg_ofr) + SUM(avg_wfr))
+            ELSE 0 
+          END AS total_gvf,
+          CASE 
+            WHEN (SUM(avg_ofr) + SUM(avg_wfr)) > 0 
+            THEN SUM(avg_wfr) * 100 / (SUM(avg_ofr) + SUM(avg_wfr))
+            ELSE 0 
+          END AS total_wlr,
+          AVG(avg_pressure) AS avg_pressure,
+          AVG(avg_temp) AS avg_temp,
+          COUNT(DISTINCT device_id) as device_count
+        FROM device_data_aggregated
+        GROUP BY time_period
+      )
+      SELECT * 
+      FROM summed
+      ORDER BY time_period
+    `;
+
+    const result = await database.query(query, [hierarchy_id]);
+    return result.rows;
+  }
+
+  static async getLatestDeviceData(device_id) {
+    const query = `
+      SELECT 
+        dd.*,
+        d.serial_number,
+        dt.type_name as device_type,
+        h.name as hierarchy_name
+      FROM device_data dd
+      JOIN device d ON dd.device_id = d.id
+      JOIN device_type dt ON d.device_type_id = dt.id
+      LEFT JOIN hierarchy h ON d.hierarchy_id = h.id
+      WHERE dd.device_id = $1
+      ORDER BY dd.created_at DESC
+      LIMIT 1
+    `;
+
+    const result = await database.query(query, [device_id]);
+    return result.rows[0] || null;
+  }
+
+  toJSON() {
+    return {
+      id: this.id,
+      company_id: this.company_id,
+      device_type_id: this.device_type_id,
+      serial_number: this.serial_number,
+      hierarchy_id: this.hierarchy_id,
+      metadata: this.metadata,
+      created_at: this.created_at,
+      updated_at: this.updated_at,
+      device_type_name: this.device_type_name,
+      hierarchy_name: this.hierarchy_name,
+      company_name: this.company_name
+    };
+  }
+}
+
+module.exports = Device;

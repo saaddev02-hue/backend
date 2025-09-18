@@ -67,13 +67,12 @@ router.get('/dashboard', protect, async (req, res) => {
         COUNT(DISTINCT h.id) as total_locations,
         COUNT(DISTINCT CASE WHEN hl.name = 'Region' THEN h.id END) as regions,
         COUNT(DISTINCT CASE WHEN hl.name = 'Area' THEN h.id END) as areas,
+        COUNT(DISTINCT CASE WHEN hl.name = 'Field' THEN h.id END) as fields,
         COUNT(DISTINCT CASE WHEN hl.name = 'Well' THEN h.id END) as wells,
-        COUNT(DISTINCT CASE WHEN hl.name = 'Device' THEN h.id END) as device_nodes,
         COUNT(DISTINCT d.id) as total_devices
       FROM hierarchy h
       JOIN hierarchy_level hl ON h.level_id = hl.id
-      LEFT JOIN hierarchy_device hd ON h.id = hd.hierarchy_id
-      LEFT JOIN device d ON hd.device_id = d.id
+      LEFT JOIN device d ON h.id = d.hierarchy_id
       WHERE h.company_id = $1
     `;
     
@@ -108,8 +107,8 @@ router.get('/dashboard', protect, async (req, res) => {
           totalLocations: parseInt(stats.total_locations),
           regions: parseInt(stats.regions),
           areas: parseInt(stats.areas),
+          fields: parseInt(stats.fields),
           wells: parseInt(stats.wells),
-          deviceNodes: parseInt(stats.device_nodes),
           totalDevices: parseInt(stats.total_devices)
         },
         deviceTypeStats: deviceTypeStats.map(stat => ({
@@ -147,22 +146,12 @@ router.get('/devices', protect, async (req, res) => {
         dt.type_name, dt.logo,
         h.name as location_name,
         c.name as company_name,
-        CONCAT(
-          COALESCE(hr.name, ''), 
-          CASE WHEN hr.name IS NOT NULL THEN ' / ' ELSE '' END,
-          COALESCE(ha.name, ''), 
-          CASE WHEN ha.name IS NOT NULL THEN ' / ' ELSE '' END,
-          COALESCE(hw.name, '')
-        ) as full_location
+        h.name as full_location
       FROM device d
       JOIN device_type dt ON d.device_type_id = dt.id
       JOIN company c ON d.company_id = c.id
-      JOIN hierarchy_device hd ON d.id = hd.device_id
-      JOIN hierarchy h ON hd.hierarchy_id = h.id
-      LEFT JOIN hierarchy hw ON h.parent_id = hw.id AND hw.level_id = (SELECT id FROM hierarchy_level WHERE name = 'Well')
-      LEFT JOIN hierarchy ha ON hw.parent_id = ha.id AND ha.level_id = (SELECT id FROM hierarchy_level WHERE name = 'Area')
-      LEFT JOIN hierarchy hr ON ha.parent_id = hr.id AND hr.level_id = (SELECT id FROM hierarchy_level WHERE name = 'Region')
-      WHERE d.company_id = $1 AND d.is_active = true
+      LEFT JOIN hierarchy h ON d.hierarchy_id = h.id
+      WHERE d.company_id = $1
       ORDER BY dt.type_name, d.serial_number
     `;
 
@@ -173,7 +162,6 @@ router.get('/devices', protect, async (req, res) => {
       type: row.type_name,
       logo: row.logo,
       metadata: row.metadata || {},
-      is_active: row.is_active,
       created_at: row.created_at,
       location: row.location_name,
       full_location: row.full_location,
@@ -208,25 +196,15 @@ router.get('/devices/:id', protect, async (req, res) => {
     
     const deviceQuery = `
       SELECT 
-        d.id, d.serial_number, d.metadata, d.is_active, d.created_at, d.updated_at,
+        d.id, d.serial_number, d.metadata, d.created_at,
         dt.type_name, dt.logo,
         h.name as location_name,
         c.id as company_id, c.name as company_name,
-        CONCAT(
-          COALESCE(hr.name, ''), 
-          CASE WHEN hr.name IS NOT NULL THEN ' / ' ELSE '' END,
-          COALESCE(ha.name, ''), 
-          CASE WHEN ha.name IS NOT NULL THEN ' / ' ELSE '' END,
-          COALESCE(hw.name, '')
-        ) as full_location
+        h.name as full_location
       FROM device d
       JOIN device_type dt ON d.device_type_id = dt.id
       JOIN company c ON d.company_id = c.id
-      JOIN hierarchy_device hd ON d.id = hd.device_id
-      JOIN hierarchy h ON hd.hierarchy_id = h.id
-      LEFT JOIN hierarchy hw ON h.parent_id = hw.id AND hw.level_id = (SELECT id FROM hierarchy_level WHERE name = 'Well')
-      LEFT JOIN hierarchy ha ON hw.parent_id = ha.id AND ha.level_id = (SELECT id FROM hierarchy_level WHERE name = 'Area')
-      LEFT JOIN hierarchy hr ON ha.parent_id = hr.id AND hr.level_id = (SELECT id FROM hierarchy_level WHERE name = 'Region')
+      LEFT JOIN hierarchy h ON d.hierarchy_id = h.id
       WHERE d.id = $1
     `;
 
@@ -259,9 +237,7 @@ router.get('/devices/:id', protect, async (req, res) => {
           type: device.type_name,
           logo: device.logo,
           metadata: device.metadata || {},
-          is_active: device.is_active,
           created_at: device.created_at,
-          updated_at: device.updated_at,
           location: device.location_name,
           full_location: device.full_location,
           company: {
@@ -294,7 +270,7 @@ router.get('/', protect, async (req, res) => {
       } else {
         // Get all hierarchies for all companies
         const query = `
-          SELECT h.*, hl.name as level_name, c.name as company_name,
+          SELECT h.*, hl.name as level_name, hl.level_order, c.name as company_name,
                  ph.name as parent_name
           FROM hierarchy h
           JOIN hierarchy_level hl ON h.level_id = hl.id
