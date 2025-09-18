@@ -1,0 +1,157 @@
+const database = require('../config/database');
+
+class Hierarchy {
+  constructor(data = {}) {
+    this.id = data.id;
+    this.company_id = data.company_id;
+    this.name = data.name;
+    this.level_id = data.level_id;
+    this.parent_id = data.parent_id;
+    this.can_attach_device = data.can_attach_device !== undefined ? data.can_attach_device : true;
+    this.created_at = data.created_at;
+    this.updated_at = data.updated_at;
+    this.level_name = data.level_name;
+    this.company_name = data.company_name;
+    this.parent_name = data.parent_name;
+  }
+
+  static async findById(id) {
+    const query = `
+      SELECT h.*, hl.name as level_name, c.name as company_name, 
+             ph.name as parent_name
+      FROM hierarchy h
+      JOIN hierarchy_level hl ON h.level_id = hl.id
+      JOIN company c ON h.company_id = c.id
+      LEFT JOIN hierarchy ph ON h.parent_id = ph.id
+      WHERE h.id = $1
+    `;
+    const result = await database.query(query, [id]);
+    return result.rows[0] ? new Hierarchy(result.rows[0]) : null;
+  }
+
+  static async findByCompany(company_id) {
+    const query = `
+      SELECT h.*, hl.name as level_name, c.name as company_name,
+             ph.name as parent_name
+      FROM hierarchy h
+      JOIN hierarchy_level hl ON h.level_id = hl.id
+      JOIN company c ON h.company_id = c.id
+      LEFT JOIN hierarchy ph ON h.parent_id = ph.id
+      WHERE h.company_id = $1
+      ORDER BY hl.level_order, h.name
+    `;
+    const result = await database.query(query, [company_id]);
+    return result.rows.map(row => new Hierarchy(row));
+  }
+
+  static async getHierarchyTree(company_id = null) {
+    let query = `
+      SELECT 
+        h.id, h.name, h.parent_id, h.company_id, h.can_attach_device,
+        hl.name AS level_name, hl.level_order,
+        c.name AS company_name,
+        d.id as device_id, d.serial_number, d.metadata,
+        dt.type_name as device_type, dt.logo as device_logo
+      FROM hierarchy h
+      JOIN hierarchy_level hl ON h.level_id = hl.id
+      JOIN company c ON h.company_id = c.id
+      LEFT JOIN hierarchy_device hd ON h.id = hd.hierarchy_id
+      LEFT JOIN device d ON hd.device_id = d.id
+      LEFT JOIN device_type dt ON d.device_type_id = dt.id
+    `;
+    
+    const params = [];
+    if (company_id) {
+      query += ' WHERE h.company_id = $1';
+      params.push(company_id);
+    }
+    
+    query += ' ORDER BY c.name, hl.level_order, h.name';
+    
+    const result = await database.query(query, params);
+    
+    // Organize hierarchical data by company
+    const companies = {};
+    const nodeMap = {};
+
+    result.rows.forEach(row => {
+      if (!companies[row.company_name]) {
+        companies[row.company_name] = {
+          id: row.company_id,
+          name: row.company_name,
+          hierarchy: [],
+          statistics: {
+            totalNodes: 0,
+            regions: 0,
+            areas: 0,
+            wells: 0,
+            devices: 0
+          }
+        };
+      }
+
+      if (!nodeMap[row.id]) {
+        nodeMap[row.id] = {
+          id: row.id,
+          name: row.name,
+          level: row.level_name,
+          level_order: row.level_order,
+          can_attach_device: row.can_attach_device,
+          children: [],
+          devices: [],
+          company_id: row.company_id
+        };
+        
+        // Update statistics
+        companies[row.company_name].statistics.totalNodes++;
+        if (row.level_name === 'Region') companies[row.company_name].statistics.regions++;
+        else if (row.level_name === 'Area') companies[row.company_name].statistics.areas++;
+        else if (row.level_name === 'Well') companies[row.company_name].statistics.wells++;
+        else if (row.level_name === 'Device') companies[row.company_name].statistics.devices++;
+      }
+
+      // Add device info if exists
+      if (row.device_id) {
+        const deviceMetadata = row.metadata || {};
+        nodeMap[row.id].devices.push({
+          id: row.device_id,
+          serial_number: row.serial_number,
+          type: row.device_type,
+          logo: row.device_logo,
+          metadata: deviceMetadata,
+          status: deviceMetadata.status || 'unknown'
+        });
+      }
+    });
+
+    // Build hierarchy tree
+    result.rows.forEach(row => {
+      const node = nodeMap[row.id];
+      if (row.parent_id && nodeMap[row.parent_id]) {
+        nodeMap[row.parent_id].children.push(node);
+      } else {
+        companies[row.company_name].hierarchy.push(node);
+      }
+    });
+
+    return companies;
+  }
+
+  toJSON() {
+    return {
+      id: this.id,
+      company_id: this.company_id,
+      name: this.name,
+      level_id: this.level_id,
+      parent_id: this.parent_id,
+      can_attach_device: this.can_attach_device,
+      created_at: this.created_at,
+      updated_at: this.updated_at,
+      level_name: this.level_name,
+      company_name: this.company_name,
+      parent_name: this.parent_name
+    };
+  }
+}
+
+module.exports = Hierarchy;
