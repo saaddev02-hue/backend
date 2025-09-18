@@ -3,15 +3,11 @@ const Company = require('../models/Company');
 // Initial companies data
 const initialCompanies = [
   {
-    name: 'Saudi saherflow',
-    domain_name: 'saherflow.com'
+    name: 'Arabco',
+    domain_name: 'arabco.com'
   },
   {
-    name: 'Abu Dhabi National Oil Company',
-    domain_name: 'adnoc.ae'
-  },
-  {
-    name: 'Saher Flow Solutions',
+    name: 'Saher Flow',
     domain_name: 'saherflow.com'
   }
 ];
