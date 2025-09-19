@@ -106,11 +106,13 @@ router.get('/hierarchy/:hierarchyId', protect, async (req, res) => {
         UNION ALL
         SELECT h.id FROM hierarchy h JOIN hierarchy_cte c ON h.parent_id = c.id
       )
-      SELECT d.*, dt.type_name as device_type_name, h.name as hierarchy_name
+      SELECT d.*, dt.type_name as device_type_name, h.name as hierarchy_name,
+             dl.data as latest_data, dl.updated_at as latest_data_time
       FROM device d
       JOIN device_type dt ON d.device_type_id = dt.id
       JOIN hierarchy_device hd ON d.id = hd.device_id
       JOIN hierarchy h ON hd.hierarchy_id = h.id
+      LEFT JOIN device_latest dl ON d.id = dl.device_id
       WHERE hd.hierarchy_id IN (SELECT id FROM hierarchy_cte)
       ORDER BY d.serial_number
     `;
@@ -140,7 +142,9 @@ router.get('/hierarchy/:hierarchyId', protect, async (req, res) => {
           serialNumber: device.serial_number,
           deviceType: device.device_type_name,
           hierarchyName: device.hierarchy_name,
-          metadata: device.metadata
+          metadata: device.metadata,
+          latestData: device.latest_data,
+          latestDataTime: device.latest_data_time
         })),
         timeRange,
         totalDataPoints: chartData.length,

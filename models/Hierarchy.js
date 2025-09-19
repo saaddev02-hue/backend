@@ -48,17 +48,19 @@ class Hierarchy {
   static async getHierarchyTree(company_id = null) {
     let query = `
       SELECT 
-        h.id, h.name, h.parent_id, h.company_id, h.can_attach_device,
+        h.id, h.name, h.parent_id, h.company_id, h.can_attach_device, h.created_at,
         hl.name AS level_name, hl.level_order,
         c.name AS company_name,
-        d.id as device_id, d.serial_number, d.metadata,
-        dt.type_name as device_type, dt.logo as device_logo
+        d.id as device_id, d.serial_number, d.metadata, d.created_at as device_created_at,
+        dt.type_name as device_type, dt.logo as device_logo,
+        dl.data as latest_data, dl.updated_at as latest_data_time
       FROM hierarchy h
       JOIN hierarchy_level hl ON h.level_id = hl.id
       JOIN company c ON h.company_id = c.id
       LEFT JOIN hierarchy_device hd ON h.id = hd.hierarchy_id
       LEFT JOIN device d ON hd.device_id = d.id
       LEFT JOIN device_type dt ON d.device_type_id = dt.id
+      LEFT JOIN device_latest dl ON d.id = dl.device_id
     `;
     
     const params = [];
@@ -99,6 +101,7 @@ class Hierarchy {
           level: row.level_name,
           level_order: row.level_order,
           can_attach_device: row.can_attach_device,
+          created_at: row.created_at,
           children: [],
           devices: [],
           company_id: row.company_id
@@ -115,15 +118,22 @@ class Hierarchy {
       // Add device info if exists
       if (row.device_id) {
         const deviceMetadata = row.metadata || {};
-        companies[row.company_name].statistics.devices++;
-        nodeMap[row.id].devices.push({
-          id: row.device_id,
-          serial_number: row.serial_number,
-          type: row.device_type,
-          logo: row.device_logo,
-          metadata: deviceMetadata,
-          status: deviceMetadata.status || 'active'
-        });
+        const existingDevice = nodeMap[row.id].devices.find(d => d.id === row.device_id);
+        
+        if (!existingDevice) {
+          companies[row.company_name].statistics.devices++;
+          nodeMap[row.id].devices.push({
+            id: row.device_id,
+            serial_number: row.serial_number,
+            type: row.device_type,
+            logo: row.device_logo,
+            metadata: deviceMetadata,
+            status: deviceMetadata.status || 'active',
+            created_at: row.device_created_at,
+            latest_data: row.latest_data,
+            latest_data_time: row.latest_data_time
+          });
+        }
       }
     });
 

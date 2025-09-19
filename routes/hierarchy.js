@@ -29,7 +29,8 @@ router.get('/tree', protect, async (req, res) => {
       data: {
         hierarchy: hierarchyTree,
         company_id: company_id,
-        is_admin: req.user.role === 'admin'
+        is_admin: req.user.role === 'admin',
+        user_company_id: req.user.company_id
       }
     });
   } catch (error) {
