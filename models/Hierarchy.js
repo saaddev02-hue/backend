@@ -48,7 +48,7 @@ class Hierarchy {
   static async getHierarchyTree(company_id = null) {
     let query = `
       SELECT 
-        h.id, h.name, h.parent_id, h.company_id, h.can_attach_device, h.created_at,
+        h.id, h.name, h.parent_id, h.company_id, h.can_attach_device, h.created_at, h.level_id,
         hl.name AS level_name, hl.level_order,
         c.name AS company_name,
         d.id as device_id, d.serial_number, d.metadata, d.created_at as device_created_at,
@@ -98,8 +98,10 @@ class Hierarchy {
         nodeMap[row.id] = {
           id: row.id,
           name: row.name,
+          level_id: row.level_id,
           level: row.level_name,
           level_order: row.level_order,
+          parent_id: row.parent_id,
           can_attach_device: row.can_attach_device,
           created_at: row.created_at,
           children: [],
@@ -138,12 +140,15 @@ class Hierarchy {
     });
 
     // Build hierarchy tree
+    const addedNodes = new Set();
     result.rows.forEach(row => {
       const node = nodeMap[row.id];
-      if (row.parent_id && nodeMap[row.parent_id]) {
+      if (row.parent_id && nodeMap[row.parent_id] && !addedNodes.has(row.id)) {
         nodeMap[row.parent_id].children.push(node);
-      } else {
+        addedNodes.add(row.id);
+      } else if (!row.parent_id && !addedNodes.has(row.id)) {
         companies[row.company_name].hierarchy.push(node);
+        addedNodes.add(row.id);
       }
     });
 
